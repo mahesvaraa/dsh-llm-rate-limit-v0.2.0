@@ -1,0 +1,6 @@
+{
+  "name": "DSH Rate Limit Studio",
+  "description": "Proactive LLM rate-limit, concurrency, queuing, and cooldown plugin for DeepSeek Harness v0.2.2-rc.5 with live configurator and traffic simulator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

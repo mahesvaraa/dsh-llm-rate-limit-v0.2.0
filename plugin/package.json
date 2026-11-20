@@ -1,0 +1,90 @@
+{
+  "name": "dsh-llm-rate-limit",
+  "version": "0.2.0",
+  "description": "Proactive LLM rate limiting, concurrency control, bounded FIFO queuing, and adaptive cooldown for DeepSeek Harness v0.2.2+",
+  "icon": "./icon.svg",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "icon.svg",
+    "locale/*.json",
+    "cordis.patch.yml",
+    "lib/index.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml",
+      "listedByDefault": true
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check": "npm run typecheck && npm test && npm run build && publint"
+  },
+  "engines": {
+    "node": ">=24.9.0",
+    "dsh": ">=0.2.2-rc.0 <0.3.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "deepseek",
+    "dsh",
+    "dsh-plugin",
+    "rate-limit",
+    "rate-limiter",
+    "token-bucket",
+    "concurrency-limit",
+    "http-429"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.1.0",
+    "@deepseek-ai/dsh-brand": "^0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm": "^0.2.2-rc.5",
+    "@deepseek-ai/dsh-session": "^0.2.2-rc.5",
+    "@deepseek-ai/dsh-timeout": "^0.2.2-rc.5"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-session": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.19.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.1.0",
+    "@deepseek-ai/dsh-brand": "^0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm": "^0.2.2-rc.5",
+    "@deepseek-ai/dsh-session": "^0.2.2-rc.5",
+    "@deepseek-ai/dsh-timeout": "^0.2.2-rc.5",
+    "@types/node": "^22.20.0",
+    "publint": "^0.3.21",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  }
+}

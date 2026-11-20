@@ -1,0 +1,4 @@
+{
+  "title": "LLM Rate Limit",
+  "description": "Proactive RPM/TPM token buckets, concurrency limits, bounded FIFO queuing, and adaptive 429/529 cooldown."
+}
