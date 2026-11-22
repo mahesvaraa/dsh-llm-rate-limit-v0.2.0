@@ -1,36 +1,88 @@
 {
-  "name": "react-example",
-  "private": true,
-  "version": "0.0.0",
+  "name": "dsh-llm-rate-limit",
+  "version": "0.2.0",
+  "description": "Proactive LLM rate limiting, concurrency control, bounded FIFO queuing, and adaptive cooldown for DeepSeek Harness v0.2.2+",
+  "icon": "./icon.svg",
   "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./types": {
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "icon.svg",
+    "locale/*.json",
+    "cordis.patch.yml",
+    "lib/index.js",
+    "lib/types/**/*.js",
+    "lib/types/**/*.d.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml",
+      "listedByDefault": true
+    }
+  },
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
-    "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "build": "tsc -p tsconfig.json && tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check": "npm run typecheck && npm test && npm run build && publint"
+  },
+  "engines": {
+    "node": ">=22.19.0",
+    "dsh": ">=0.2.0-rc.0 <0.3.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "deepseek",
+    "dsh",
+    "dsh-plugin",
+    "rate-limit",
+    "rate-limiter",
+    "token-bucket",
+    "concurrency-limit",
+    "http-429"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1 || ^4.1.0",
+    "@deepseek-ai/dsh-llm": ">=0.2.0-rc.0 <0.3.0",
+    "@deepseek-ai/dsh-session": ">=0.2.0-rc.0 <0.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-session": {
+      "optional": true
+    }
   },
   "dependencies": {
-    "@google/genai": "^2.4.0",
-    "@tailwindcss/vite": "^4.3.3",
-    "@vitejs/plugin-react": "^6.1.1",
-    "lucide-react": "^0.546.0",
-    "react": "^19.0.1",
-    "react-dom": "^19.0.1",
-    "vite": "^8.3.0",
-    "express": "^4.21.2",
-    "dotenv": "^17.2.3",
-    "motion": "^12.23.24"
+    "@deepseek-ai/schemastery": "^3.19.0"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "autoprefixer": "^10.4.21",
-    "esbuild": "^0.28.0",
-    "tailwindcss": "^4.3.3",
-    "tsx": "^4.21.0",
-    "typescript": "^7.0.2",
-    "@types/express": "^4.17.21"
+    "@deepseek-ai/cordis": "^4.1.0",
+    "@deepseek-ai/dsh-brand": "^0.2.2-rc.5",
+    "@deepseek-ai/dsh-llm": "^0.2.2-rc.5",
+    "@deepseek-ai/dsh-session": "^0.2.2-rc.5",
+    "@deepseek-ai/dsh-timeout": "^0.2.2-rc.5",
+    "@types/node": "^22.20.0",
+    "publint": "^0.3.21",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
   }
 }
