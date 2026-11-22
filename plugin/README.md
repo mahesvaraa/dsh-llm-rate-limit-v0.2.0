@@ -10,13 +10,23 @@ Proactive LLM rate-limiting, concurrency control, bounded FIFO queuing, auxiliar
 4. **Updated `GenerateOptions` token estimator**: Prices `FileBlock` (`file`), `tool-addition`, `tool-removal`, `offloaded` image placeholders, and `options.toolHistory` without mutating frozen agent-loop requests.
 5. **Cordis `^4.1.0` & Schemastery `^3.19.0`**: Aligned peer dependencies, `engines.dsh`, `exports`, `./cordis.patch.yml`, `./locale/*.json`, and `icon.svg`.
 
-## Build & Install
+## Install (Prebuilt — no build step required)
+
+`lib/index.js` and `lib/types/*` are already prebuilt inside this package, so `dsh` / `pnpm` does not need any `prepare` or build scripts:
+
+```bash
+# Install from a local directory:
+dsh plugin --profile web add ./path/to/dsh-llm-rate-limit
+
+# Or push the contents of this directory (NOT the web studio root) to GitHub:
+dsh plugin --profile web add github:<your-user>/<your-repo>
+```
+
+To rebuild locally after editing `src/`:
 
 ```bash
 npm install
 npm run check
-# Install from local directory into a DSH profile:
-dsh plugin --profile web add ./path/to/dsh-llm-rate-limit
 ```
 
 ## Custom OpenAI-Compatible Providers

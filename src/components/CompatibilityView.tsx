@@ -20,7 +20,7 @@ export function CompatibilityView({ lang, onJumpToTab }: CompatibilityViewProps)
     window.setTimeout(() => setCopiedCmd(null), 1800)
   }
 
-  const installCmd = 'npm install && npm run check\ndsh plugin --profile web add ./dsh-llm-rate-limit'
+  const installCmd = 'unzip dsh-llm-rate-limit-v0.2.0.zip\ndsh plugin --profile web add ./dsh-llm-rate-limit'
 
   const severityLabel = (sev: MigrationFinding['severity']) => {
     if (sev === 'breaking') {

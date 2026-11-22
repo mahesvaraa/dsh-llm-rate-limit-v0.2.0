@@ -9,12 +9,34 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { GenerateOptions, LlmFailure, StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
-import { appendPluginRecord } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
-import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { AdmissionWaitId } from './brand.ts'
 import { estimateRequestTokens } from './estimate.ts'
 import type { AdmissionWaitReason } from './types.ts'
+
+/** Largest delay Node schedules without clamping it to one millisecond (matches @deepseek-ai/dsh-timeout). */
+const MAX_TIMER_DELAY_MS = 2_147_483_647
+
+type AppendPluginRecordFn = (
+  session: Session,
+  type: 'plugin:dsh-llm-rate-limit/admission-wait' | 'plugin:dsh-llm-rate-limit/admission-started',
+  data: unknown,
+) => unknown
+
+let cachedAppendPluginRecord: AppendPluginRecordFn | null | undefined
+
+async function resolveAppendPluginRecord(): Promise<AppendPluginRecordFn | null> {
+  if (cachedAppendPluginRecord !== undefined) return cachedAppendPluginRecord
+  try {
+    const mod = await import('@deepseek-ai/dsh-session')
+    cachedAppendPluginRecord = typeof mod.appendPluginRecord === 'function'
+      ? (mod.appendPluginRecord as AppendPluginRecordFn)
+      : null
+  } catch {
+    cachedAppendPluginRecord = null
+  }
+  return cachedAppendPluginRecord
+}
 
 export type {
   AdmissionWaitReason,

@@ -1,4 +1,4 @@
-import { brandString, type Branded } from '@deepseek-ai/dsh-brand'
+import type { Branded } from '@deepseek-ai/dsh-brand'
 
 /** Stable identity joining one queued admission with its started transition. */
 export type AdmissionWaitId = Branded<'AdmissionWaitId'>
@@ -9,5 +9,5 @@ export type AdmissionWaitId = Branded<'AdmissionWaitId'>
  * @returns the same string, branded; no validation is performed.
  */
 export function AdmissionWaitId(id: string): AdmissionWaitId {
-  return brandString<AdmissionWaitId>(id)
+  return id as AdmissionWaitId
 }
