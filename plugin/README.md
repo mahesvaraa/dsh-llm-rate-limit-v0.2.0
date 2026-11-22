@@ -18,3 +18,41 @@ npm run check
 # Install from local directory into a DSH profile:
 dsh plugin --profile web add ./path/to/dsh-llm-rate-limit
 ```
+
+## Custom OpenAI-Compatible Providers
+
+In DeepSeek Harness `v0.2.2+`, custom OpenAI-compatible gateways are configured via `@deepseek-ai/dsh-llm-pi-ai` (either in the Web UI **Models** page or in `$DSH_HOME/profiles/<profile>/settings.yml`):
+
+```yaml
+# $DSH_HOME/profiles/<profile>/settings.yml
+llm-pi-ai:
+  providers:
+    my-openai-gateway:
+      displayName: My OpenAI Gateway
+      api: openai-completions   # or openai-responses
+      baseURL: https://api.example.com/v1
+      apiKeyEnv: MY_GATEWAY_API_KEY
+      models:
+        - id: gpt-4o-mini
+          name: GPT-4o Mini
+          contextWindow: 128000
+```
+
+Then configure `dsh-llm-rate-limit` using the **exact same route key** (`my-openai-gateway`) under `providers:` in `cordis.patch.yml`:
+
+```yaml
+- insert:
+    - id: llm-rate-limit
+      name: dsh-llm-rate-limit
+      config:
+        providers:
+          deepseek-official:
+            requests: { perMinute: 30, burst: 2 }
+            maxConcurrentRequests: 2
+            queue: { maxSize: 100, maxWaitMs: 300000, auxiliary: reject }
+          my-openai-gateway:
+            requests: { perMinute: 60, burst: 5 }
+            tokens: { perMinute: 150000, burst: 40000, estimatedOutputTokens: 4096, imageTokens: 1024 }
+            maxConcurrentRequests: 4
+            queue: { maxSize: 100, maxWaitMs: 180000, auxiliary: reject }
+```

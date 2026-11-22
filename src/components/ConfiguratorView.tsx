@@ -3,7 +3,9 @@ import { Check, Copy, Download, AlertTriangle } from 'lucide-react'
 import {
   PRESET_CONFIGS,
   buildCordisPatchYaml,
+  buildPiAiSettingsYaml,
   validatePolicyConfig,
+  type CustomOpenAiRouteMeta,
   type ProviderPolicyConfig,
 } from '../engine/simulator'
 
@@ -15,9 +17,20 @@ interface ConfiguratorViewProps {
 
 export function ConfiguratorView({ lang, policy, onChange }: ConfiguratorViewProps) {
   const [copied, setCopied] = useState(false)
+  const [copiedPiAi, setCopiedPiAi] = useState(false)
   const [activePreset, setActivePreset] = useState<string>('deepseekDefault')
+  const [showCustomGateway, setShowCustomGateway] = useState<boolean>(false)
+  const [gatewayMeta, setGatewayMeta] = useState<CustomOpenAiRouteMeta>({
+    displayName: 'OpenAI-Compatible Gateway',
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKeyEnv: 'OPENROUTER_API_KEY',
+    api: 'openai-completions',
+    modelId: 'deepseek/deepseek-chat',
+    contextWindow: 131072,
+  })
 
   const yamlText = buildCordisPatchYaml(policy)
+  const piAiYamlText = buildPiAiSettingsYaml(policy.provider, gatewayMeta)
   const errors = validatePolicyConfig(policy)
 
   const handlePreset = (key: string) => {
@@ -25,6 +38,9 @@ export function ConfiguratorView({ lang, policy, onChange }: ConfiguratorViewPro
     if (!preset) return
     setActivePreset(key)
     onChange({ ...preset.policy })
+    if (key === 'openaiCompatible') {
+      setShowCustomGateway(true)
+    }
   }
 
   const updateNum = (field: keyof ProviderPolicyConfig, raw: string, min = 1) => {
@@ -37,6 +53,12 @@ export function ConfiguratorView({ lang, policy, onChange }: ConfiguratorViewPro
     await navigator.clipboard.writeText(yamlText)
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1800)
+  }
+
+  const handleCopyPiAi = async () => {
+    await navigator.clipboard.writeText(piAiYamlText)
+    setCopiedPiAi(true)
+    window.setTimeout(() => setCopiedPiAi(false), 1800)
   }
 
   const handleDownloadYaml = () => {
@@ -110,6 +132,11 @@ export function ConfiguratorView({ lang, policy, onChange }: ConfiguratorViewPro
                   onChange={e => onChange({ ...policy, provider: e.target.value })}
                   className="w-full px-3 py-2 text-sm font-mono bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
                 />
+                <span className="block text-[11px] text-slate-500">
+                  {lang === 'ru'
+                    ? 'Должен точно совпадать с ключом в llm-pi-ai.providers (строчные буквы и дефисы).'
+                    : 'Must match the exact key declared in llm-pi-ai.providers.'}
+                </span>
               </label>
 
               <div className="space-y-1.5">
@@ -133,6 +160,78 @@ export function ConfiguratorView({ lang, policy, onChange }: ConfiguratorViewPro
                   ))}
                 </div>
               </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="text-xs font-semibold text-slate-900">
+                    {lang === 'ru'
+                      ? 'Регистрация OpenAI-compatible провайдера (@deepseek-ai/dsh-llm-pi-ai)'
+                      : 'OpenAI-compatible endpoint registration (@deepseek-ai/dsh-llm-pi-ai)'}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {lang === 'ru'
+                      ? 'Включите, чтобы сгенерировать settings.yml для своего OpenAI-compatible API и связать его с этим лимитом.'
+                      : 'Generate the matching llm-pi-ai provider block for your custom OpenAI-compatible endpoint.'}
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={showCustomGateway}
+                  onChange={e => setShowCustomGateway(e.target.checked)}
+                  className="w-4 h-4 accent-slate-900 cursor-pointer shrink-0"
+                  aria-label="Show OpenAI-Compatible llm-pi-ai configuration"
+                />
+              </div>
+
+              {showCustomGateway && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 pt-3 border-t border-slate-100">
+                  <label className="block space-y-1">
+                    <span className="text-xs text-slate-600">baseURL</span>
+                    <input
+                      type="text"
+                      value={gatewayMeta.baseURL}
+                      onChange={e => setGatewayMeta({ ...gatewayMeta, baseURL: e.target.value })}
+                      className="w-full px-2.5 py-2 text-xs font-mono border border-slate-300 rounded-lg"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs text-slate-600">apiKeyEnv</span>
+                    <input
+                      type="text"
+                      value={gatewayMeta.apiKeyEnv}
+                      onChange={e => setGatewayMeta({ ...gatewayMeta, apiKeyEnv: e.target.value })}
+                      className="w-full px-2.5 py-2 text-xs font-mono border border-slate-300 rounded-lg"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs text-slate-600">api protocol</span>
+                    <select
+                      value={gatewayMeta.api}
+                      onChange={e =>
+                        setGatewayMeta({
+                          ...gatewayMeta,
+                          api: e.target.value as 'openai-completions' | 'openai-responses',
+                        })
+                      }
+                      className="w-full px-2.5 py-2 text-xs font-mono border border-slate-300 rounded-lg bg-white"
+                    >
+                      <option value="openai-completions">openai-completions</option>
+                      <option value="openai-responses">openai-responses</option>
+                    </select>
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs text-slate-600">models[0].id</span>
+                    <input
+                      type="text"
+                      value={gatewayMeta.modelId}
+                      onChange={e => setGatewayMeta({ ...gatewayMeta, modelId: e.target.value })}
+                      className="w-full px-2.5 py-2 text-xs font-mono border border-slate-300 rounded-lg"
+                    />
+                  </label>
+                </div>
+              )}
             </div>
           </div>
 
@@ -345,48 +444,76 @@ export function ConfiguratorView({ lang, policy, onChange }: ConfiguratorViewPro
           </div>
         </div>
 
-        <div className="lg:col-span-5 bg-white border border-slate-200 rounded-xl p-5 space-y-4 lg:sticky lg:top-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div>
-              <h2 className="text-sm font-semibold text-slate-900 font-mono">cordis.patch.yml</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                $DSH_HOME/profiles/&lt;profile&gt;/cordis.patch.yml
+        <div className="lg:col-span-5 space-y-5 lg:sticky lg:top-6">
+          <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900 font-mono">cordis.patch.yml</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  $DSH_HOME/profiles/&lt;profile&gt;/cordis.patch.yml
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopy}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-300 rounded-lg hover:bg-slate-50 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copied ? (lang === 'ru' ? 'Готово' : 'Copied') : (lang === 'ru' ? 'Копировать' : 'Copy')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadYaml}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>YAML</span>
+                </button>
+              </div>
+            </div>
+
+            <pre className="text-xs font-mono bg-slate-950 text-slate-100 rounded-lg p-4 overflow-x-auto leading-relaxed">
+              {yamlText}
+            </pre>
+
+            <div className="text-xs text-slate-600 space-y-1.5 pt-1">
+              <div className="font-medium text-slate-800">
+                {lang === 'ru' ? 'Как привязать пользовательский OpenAI-compatible провайдер' : 'Binding custom OpenAI-compatible routes'}
+              </div>
+              <p className="leading-relaxed">
+                {lang === 'ru'
+                  ? 'Укажите под providers: тот же ключ маршрута, под которым провайдер зарегистрирован в @deepseek-ai/dsh-llm-pi-ai (например openrouter, local-vllm или my-openai-gateway). Для нескольких провайдеров добавьте несколько ключей под providers:.'
+                  : 'Use the exact route key registered in @deepseek-ai/dsh-llm-pi-ai (such as openrouter, local-vllm, or my-openai-gateway) under providers:. You can declare multiple routes simultaneously.'}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-300 rounded-lg hover:bg-slate-50 whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? (lang === 'ru' ? 'Готово' : 'Copied') : (lang === 'ru' ? 'Копировать' : 'Copy')}</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleDownloadYaml}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800 whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>YAML</span>
-              </button>
-            </div>
           </div>
 
-          <pre className="text-xs font-mono bg-slate-950 text-slate-100 rounded-lg p-4 overflow-x-auto leading-relaxed">
-            {yamlText}
-          </pre>
-
-          <div className="text-xs text-slate-600 space-y-1.5 pt-1">
-            <div className="font-medium text-slate-800">
-              {lang === 'ru' ? 'Порядок применения в DSH 0.2.2-rc.5' : 'How DSH 0.2.2-rc.5 loads this patch'}
+          {showCustomGateway && (
+            <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900 font-mono">settings.yml (llm-pi-ai)</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {lang === 'ru'
+                      ? 'Регистрация самого OpenAI-compatible эндпоинта в DSH'
+                      : 'Custom OpenAI-compatible endpoint declaration in DSH'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyPiAi}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-300 rounded-lg hover:bg-slate-50 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  {copiedPiAi ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedPiAi ? (lang === 'ru' ? 'Готово' : 'Copied') : (lang === 'ru' ? 'Копировать' : 'Copy')}</span>
+                </button>
+              </div>
+              <pre className="text-xs font-mono bg-slate-950 text-slate-100 rounded-lg p-4 overflow-x-auto leading-relaxed">
+                {piAiYamlText}
+              </pre>
             </div>
-            <p className="leading-relaxed">
-              {lang === 'ru'
-                ? 'При установке через dsh plugin add пакет автоматически регистрирует ./cordis.patch.yml через поле dsh.bundle.patch в package.json. Для ручной настройки добавьте секцию insert в patch-файл нужного профиля.'
-                : 'Installing via dsh plugin add picks up ./cordis.patch.yml from package.json dsh.bundle.patch automatically, or you can merge the insert block into your profile patch file manually.'}
-            </p>
-          </div>
+          )}
         </div>
       </div>
     </div>

@@ -78,7 +78,7 @@ export const PRESET_CONFIGS: Record<string, { labelRu: string; labelEn: string; 
     },
   },
   volcengineArk: {
-    labelRu: 'Volcengine Ark (строгий RPM + TPM)',
+    labelRu: 'Volcengine Ark (RPM + TPM)',
     labelEn: 'Volcengine Ark (Strict RPM + TPM)',
     policy: {
       provider: 'volcengine-ark',
@@ -104,6 +104,60 @@ export const PRESET_CONFIGS: Record<string, { labelRu: string; labelEn: string; 
       jitterRatio: 0.1,
     },
   },
+  openaiCompatible: {
+    labelRu: 'OpenAI-Compatible (свой провайдер)',
+    labelEn: 'OpenAI-Compatible (Custom Gateway)',
+    policy: {
+      provider: 'my-openai-gateway',
+      requestsEnabled: true,
+      requestsPerMinute: 60,
+      requestsBurst: 5,
+      tokensEnabled: true,
+      tokensPerMinute: 150000,
+      tokensBurst: 40000,
+      estimatedOutputTokens: 4096,
+      imageTokens: 1024,
+      concurrencyEnabled: true,
+      maxConcurrentRequests: 4,
+      queueMaxSize: 100,
+      queueMaxWaitMs: 180000,
+      auxiliary: 'reject',
+      cooldownEnabled: true,
+      cooldownCodes: ['RATE_LIMIT', 'SERVER', 'TIMEOUT'],
+      cooldownStatuses: [429, 503, 529],
+      initialDelayMs: 500,
+      maxDelayMs: 60000,
+      maxProviderDelayMs: 3600000,
+      jitterRatio: 0.1,
+    },
+  },
+}
+
+export interface CustomOpenAiRouteMeta {
+  displayName: string
+  baseURL: string
+  apiKeyEnv: string
+  api: 'openai-completions' | 'openai-responses'
+  modelId: string
+  contextWindow: number
+}
+
+export function buildPiAiSettingsYaml(providerKey: string, meta: CustomOpenAiRouteMeta): string {
+  const route = providerKey.trim() || 'my-openai-gateway'
+  return [
+    '# $DSH_HOME/profiles/<profile>/settings.yml (или настройка Models в Web UI)',
+    'llm-pi-ai:',
+    '  providers:',
+    `    ${route}:`,
+    `      displayName: ${meta.displayName || route}`,
+    `      api: ${meta.api}`,
+    `      baseURL: ${meta.baseURL || 'https://api.example.com/v1'}`,
+    `      apiKeyEnv: ${meta.apiKeyEnv || 'OPENAI_COMPAT_API_KEY'}`,
+    '      models:',
+    `        - id: ${meta.modelId || 'gpt-4o-mini'}`,
+    `          name: ${meta.modelId || 'gpt-4o-mini'}`,
+    `          contextWindow: ${meta.contextWindow || 128000}`,
+  ].join('\n') + '\n'
 }
 
 export function buildCordisPatchYaml(policy: ProviderPolicyConfig): string {
