@@ -121,7 +121,7 @@ const positiveInteger = (): z<number> => z.number().step(1).min(1).max(Number.MA
 const timerDelay = (): z<number> => z.number().min(1).max(MAX_TIMER_DELAY_MS)
 
 /** Runtime schema for {@link Config}; semantic cross-field checks run at load. */
-export const Config: z<Config> = vol(z.object({
+export const Config: z<Config> = z.object({
   providers: vol(z.dict(z.object({
     requests: z.union([z.const(undefined), z.object({
       perMinute: positiveInteger().required(),
@@ -147,8 +147,8 @@ export const Config: z<Config> = vol(z.object({
       maxProviderDelayMs: timerDelay().required(),
       jitterRatio: z.number().min(0).max(1).required(),
     })]),
-  }))).required(),
-})) as unknown as z<Config>
+  }))).default({}),
+}) as unknown as z<Config>
 
 /** Non-serializable clock and entropy hooks for deterministic tests. */
 export interface RateLimitInternals {
@@ -239,7 +239,9 @@ function positiveSafeInteger(subject: string, value: number): void {
 }
 
 export function validateConfig(config: Config): void {
+  if (!config || typeof config !== 'object') return
   rejectUnknownKeys('config', config, new Set(['providers']))
+  if (!config.providers || typeof config.providers !== 'object') return
   for (const [provider, policy] of Object.entries(config.providers)) {
     if (provider.length === 0) throw new Error('llm-rate-limit: provider keys must be non-empty')
     rejectUnknownKeys(`provider "${provider}"`, policy, KNOWN_PROVIDER_KEYS)
