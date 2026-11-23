@@ -115,12 +115,14 @@ export interface Config {
   providers: Record<string, ProviderLimitConfig>
 }
 
+const vol = <T extends z>(schema: T): T => (typeof (schema as any)?.volatile === 'function' ? (schema as any).volatile() : schema)
+
 const positiveInteger = (): z<number> => z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER)
 const timerDelay = (): z<number> => z.number().min(1).max(MAX_TIMER_DELAY_MS)
 
 /** Runtime schema for {@link Config}; semantic cross-field checks run at load. */
-export const Config: z<Config> = z.object({
-  providers: z.dict(z.object({
+export const Config: z<Config> = vol(z.object({
+  providers: vol(z.dict(z.object({
     requests: z.union([z.const(undefined), z.object({
       perMinute: positiveInteger().required(),
       burst: positiveInteger().required(),
@@ -145,8 +147,8 @@ export const Config: z<Config> = z.object({
       maxProviderDelayMs: timerDelay().required(),
       jitterRatio: z.number().min(0).max(1).required(),
     })]),
-  })).required(),
-}) as unknown as z<Config>
+  }))).required(),
+})) as unknown as z<Config>
 
 /** Non-serializable clock and entropy hooks for deterministic tests. */
 export interface RateLimitInternals {
@@ -339,6 +341,49 @@ function abortedFailure(message: string): AdmissionFailure {
   return { ok: false, aborted: true, failure: { message, code: 'ABORTED' } }
 }
 
+const SETTINGS_ENTRY_ID = 'llm-rate-limit'
+
+function isLoopback(addr: string): boolean {
+  if (!addr) return true
+  return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1' || addr === 'localhost'
+}
+
+function sendJson(res: any, status: number, body: unknown): void {
+  const data = Buffer.from(JSON.stringify(body))
+  res.writeHead(status, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': data.length,
+  })
+  res.end(data)
+}
+
+async function readBody(req: any): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    req.on('data', (c: Buffer) => chunks.push(c))
+    req.on('end', () => {
+      try {
+        const str = Buffer.concat(chunks).toString('utf8')
+        resolve(str ? JSON.parse(str) : {})
+      } catch (e) {
+        reject(e)
+      }
+    })
+    req.on('error', reject)
+  })
+}
+
+function findOwnDescriptor(service: any): any {
+  try {
+    const rows = service.describe()
+    return rows.find((row: any) => row && row.ns === SETTINGS_ENTRY_ID)
+      ?? rows.find((row: any) => row && row.value && typeof row.value === 'object' && 'providers' in row.value)
+      ?? null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Install proactive admission control for configured provider routes.
  * Compatible with DeepSeek Harness v0.2.2+ (`@deepseek-ai/cordis` 4.1,
@@ -354,10 +399,11 @@ export function apply(ctx: Context, config: Config, internals: RateLimitInternal
   const lifetime = new AbortController()
   const active = new Set<Promise<void>>()
   const states = new Map<string, ProviderState>()
+  let currentConfig: Config = { providers: { ...(config.providers ?? {}) } }
 
-  for (const [provider, policy] of Object.entries(config.providers)) {
+  function createProviderState(policy: ProviderLimitConfig): ProviderState {
     const createdAt = now()
-    states.set(provider, {
+    return {
       config: policy,
       ...policy.requests === undefined ? {} : { requests: bucket(policy.requests, createdAt) },
       ...policy.tokens === undefined ? {} : { tokens: bucket(policy.tokens, createdAt) },
@@ -368,7 +414,59 @@ export function apply(ctx: Context, config: Config, internals: RateLimitInternal
       queue: [],
       timer: undefined,
       pumping: false,
-    })
+    }
+  }
+
+  for (const [provider, policy] of Object.entries(currentConfig.providers)) {
+    states.set(provider, createProviderState(policy))
+  }
+
+  function applyConfigUpdate(nextConfig: Config): void {
+    validateConfig(nextConfig)
+    currentConfig = { providers: { ...nextConfig.providers } }
+
+    for (const [provider, state] of states.entries()) {
+      if (!Object.hasOwn(nextConfig.providers, provider)) {
+        if (state.timer !== undefined) clearTimeout(state.timer)
+        state.timer = undefined
+        for (const entry of state.queue.splice(0)) {
+          settleEntry(entry, abortedFailure(`llm-rate-limit: provider "${provider}" removed`))
+        }
+        states.delete(provider)
+      }
+    }
+
+    for (const [provider, policy] of Object.entries(nextConfig.providers)) {
+      const existing = states.get(provider)
+      if (existing === undefined) {
+        states.set(provider, createProviderState(policy))
+      } else {
+        ;(existing as any).config = policy
+        if (policy.requests !== undefined) {
+          if (existing.requests === undefined) {
+            ;(existing as any).requests = bucket(policy.requests, now())
+          } else {
+            existing.requests.burst = policy.requests.burst
+            ;(existing.requests as any).perMillisecond = policy.requests.perMinute / 60_000
+            existing.requests.tokens = Math.min(existing.requests.tokens, existing.requests.burst)
+          }
+        } else {
+          ;(existing as any).requests = undefined
+        }
+        if (policy.tokens !== undefined) {
+          if (existing.tokens === undefined) {
+            ;(existing as any).tokens = bucket(policy.tokens, now())
+          } else {
+            existing.tokens.burst = policy.tokens.burst
+            ;(existing.tokens as any).perMillisecond = policy.tokens.perMinute / 60_000
+            existing.tokens.tokens = Math.min(existing.tokens.tokens, existing.tokens.burst)
+          }
+        } else {
+          ;(existing as any).tokens = undefined
+        }
+        pump(existing)
+      }
+    }
   }
 
   function capacityWait(state: ProviderState, tokenCost: number, at: number): CapacityWait | undefined {
@@ -678,4 +776,99 @@ export function apply(ctx: Context, config: Config, internals: RateLimitInternal
     }
     await Promise.allSettled([...active])
   }, 'llm-rate-limit: abort queued admission and drain active streams')
+
+  ctx.inject(['webServer'], (webCtx: any) => {
+    const route = {
+      kind: 'prefix' as const,
+      path: '/llm-rate-limit',
+      handler: async (req: any, res: any) => {
+        if (!isLoopback(req.socket?.remoteAddress ?? '')) {
+          sendJson(res, 403, { ok: false, error: 'Forbidden' })
+          return
+        }
+        const url = new URL(req.url ?? '/', 'http://x')
+        const method = req.method ?? 'GET'
+
+        try {
+          if (method === 'GET' && url.pathname === '/llm-rate-limit/config') {
+            const knownProviders = new Set<string>(Object.keys(currentConfig.providers))
+            try {
+              const llm = ctx.get('llm') as any
+              if (llm?.adapters) {
+                for (const k of Object.keys(llm.adapters)) knownProviders.add(k)
+              }
+            } catch {}
+
+            sendJson(res, 200, {
+              ok: true,
+              config: currentConfig,
+              knownProviders: [...knownProviders],
+            })
+            return
+          }
+
+          if (method === 'POST' && url.pathname === '/llm-rate-limit/config') {
+            const body = await readBody(req)
+            if (!body || typeof body !== 'object' || !body.config) {
+              sendJson(res, 400, { ok: false, error: 'Invalid body: "config" required' })
+              return
+            }
+
+            const nextConfig = body.config as Config
+            applyConfigUpdate(nextConfig)
+
+            const settings = ctx.get('settings', false) as any
+            if (settings && typeof settings.describe === 'function' && typeof settings.update === 'function') {
+              const row = findOwnDescriptor(settings)
+              if (row) {
+                await settings.update(row.ns, { providers: nextConfig.providers })
+              }
+            }
+
+            sendJson(res, 200, { ok: true, config: currentConfig })
+            return
+          }
+
+          if (method === 'GET' && url.pathname === '/llm-rate-limit/stats') {
+            const at = now()
+            const stats: Record<string, any> = {}
+            for (const [provider, state] of states.entries()) {
+              if (state.requests !== undefined) refill(state.requests, at)
+              if (state.tokens !== undefined) refill(state.tokens, at)
+              stats[provider] = {
+                active: state.active,
+                queued: state.queue.length,
+                cooldownRemainingMs: Math.max(0, state.cooldownUntil - at),
+                failureStreak: state.failureStreak,
+                requestsRemaining: state.requests !== undefined ? Math.floor(state.requests.tokens) : null,
+                tokensRemaining: state.tokens !== undefined ? Math.floor(state.tokens.tokens) : null,
+              }
+            }
+            sendJson(res, 200, { ok: true, stats })
+            return
+          }
+
+          if (method === 'POST' && url.pathname === '/llm-rate-limit/reset-cooldown') {
+            const body = await readBody(req)
+            const provider = body?.provider
+            if (typeof provider === 'string' && states.has(provider)) {
+              const state = states.get(provider)!
+              state.cooldownUntil = 0
+              state.failureStreak = 0
+              pump(state)
+              sendJson(res, 200, { ok: true })
+              return
+            }
+            sendJson(res, 400, { ok: false, error: 'Provider not found' })
+            return
+          }
+
+          sendJson(res, 404, { ok: false, error: 'Not found' })
+        } catch (err: any) {
+          sendJson(res, 500, { ok: false, error: err?.message ?? String(err) })
+        }
+      },
+    }
+    webCtx.effect(() => webCtx.webServer.register(route), 'llm-rate-limit: web routes')
+  })
 }
